@@ -4,25 +4,31 @@ import os
 from sqlalchemy import create_engine, text
 from passlib.context import CryptContext
 
-# -------------------------------------------------
-# CONFIG
-# -------------------------------------------------
-st.set_page_config(page_title="Accountooze Accounting Marathon", layout="centered")
+# =================================================
+# PAGE CONFIG
+# =================================================
+st.set_page_config(
+    page_title="Accountooze Accounting Marathon",
+    layout="centered"
+)
 
-# -------------------------------------------------
+# =================================================
 # BRANDING
-# -------------------------------------------------
+# =================================================
 st.markdown("""
 <style>
 .block-container { padding-top: 2rem; }
 body { background-color: #f6f8fb; }
 h1, h2, h3 { color: #0f2a44; }
+
 .stButton button {
     background-color: #0f2a44;
     color: white;
     border-radius: 6px;
     font-weight: 600;
+    padding: 0.5rem 1.2rem;
 }
+
 .accountooze-card {
     background: white;
     padding: 1.5rem;
@@ -30,40 +36,46 @@ h1, h2, h3 { color: #0f2a44; }
     box-shadow: 0 4px 12px rgba(0,0,0,0.06);
     margin-bottom: 1.5rem;
 }
+
 .footer {
-    text-align:center;
-    font-size:0.85rem;
-    color:#777;
-    margin-top:3rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #777;
+    margin-top: 3rem;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------------------------------------
+# =================================================
 # DATABASE
-# -------------------------------------------------
+# =================================================
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def hash_password(pwd):
+def hash_password(pwd: str) -> str:
     return pwd_context.hash(pwd)
 
-def verify_password(pwd, hashed):
+def verify_password(pwd: str, hashed: str) -> bool:
     return pwd_context.verify(pwd, hashed)
 
-# -------------------------------------------------
-# TABLES
-# -------------------------------------------------
+def clean_email(email: str) -> str:
+    return email.strip().lower()
+
+# =================================================
+# CREATE TABLES (SAFE)
+# =================================================
 with engine.begin() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
-            email TEXT UNIQUE,
-            password TEXT
+            email TEXT NOT NULL,
+            password TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """))
+
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS results (
             id SERIAL PRIMARY KEY,
@@ -74,36 +86,45 @@ with engine.begin() as conn:
         );
     """))
 
-# -------------------------------------------------
+# =================================================
 # QUESTIONS
-# -------------------------------------------------
+# =================================================
 MCQS = [
-    ("Security deposit received from tenant should be recorded as:", "Liability",
+    ("Security deposit received from tenant should be recorded as:",
+     "Liability",
      ["Rental Income", "Liability", "Accounts Receivable", "Owner Contribution"]),
-    ("Loan taken from bank will increase which account?", "Liability",
+
+    ("Loan taken from bank will increase which account?",
+     "Liability",
      ["Expense", "Income", "Asset", "Liability"]),
-    ("Owner withdrawal should be recorded as:", "Equity / Draw",
+
+    ("Owner withdrawal should be recorded as:",
+     "Equity / Draw",
      ["Expense", "Equity / Draw", "Liability", "Income"]),
-    ("Which report does a CPA use to start tax return?", "Balance Sheet",
+
+    ("Which report does a CPA review first at tax time?",
+     "Balance Sheet",
      ["Profit & Loss", "Trial Balance", "Balance Sheet", "Cash Flow"]),
-    ("Security deposits should appear on which report?", "Balance Sheet",
-     ["Profit & Loss", "Balance Sheet", "Cash Flow", "AR Aging"])
+
+    ("Security deposits should appear on which report?",
+     "Balance Sheet",
+     ["Profit & Loss", "Balance Sheet", "Cash Flow", "AR Aging"]),
 ]
 
 BANK_TASKS = [
     {
         "description": "AMZN Mktp US*2A45 Office Supplies Seattle",
-        "vendor": "Amazon",
+        "vendor": "amazon",
         "gl": "Office Supplies Expense"
     },
     {
         "description": "UBER *TRIP HELP.UBER.COM",
-        "vendor": "Uber",
+        "vendor": "uber",
         "gl": "Travel Expense"
     },
     {
         "description": "COMCAST CABLE INTERNET",
-        "vendor": "Comcast",
+        "vendor": "comcast",
         "gl": "Internet Expense"
     }
 ]
@@ -117,38 +138,46 @@ GL_OPTIONS = [
     "Advertising Expense"
 ]
 
-# -------------------------------------------------
-# SESSION STATE
-# -------------------------------------------------
-for k in ["user_id", "email", "score", "submitted", "start_time"]:
-    if k not in st.session_state:
-        st.session_state[k] = None
+# =================================================
+# SESSION STATE INIT
+# =================================================
+for key in [
+    "user_id", "email", "score",
+    "start_time", "submitted"
+]:
+    if key not in st.session_state:
+        st.session_state[key] = None
 
-# -------------------------------------------------
+# =================================================
 # HEADER
-# -------------------------------------------------
+# =================================================
 st.markdown("""
 <div class="accountooze-card">
 <h1>Accountooze Accounting Marathon</h1>
-<p>Real-world accounting skill evaluation</p>
+<p>Real-world accounting skill evaluation platform</p>
 </div>
 """, unsafe_allow_html=True)
 
-# -------------------------------------------------
-# AUTH
-# -------------------------------------------------
+# =================================================
+# AUTH (LOGIN / REGISTER)
+# =================================================
 if not st.session_state.user_id:
-    tab1, tab2 = st.tabs(["Login", "Create Account"])
 
-    with tab1:
+    tab_login, tab_register = st.tabs(["🔐 Login", "📝 Create Account"])
+
+    # ---------------- LOGIN ----------------
+    with tab_login:
         st.markdown('<div class="accountooze-card">', unsafe_allow_html=True)
-        email = st.text_input("Email")
+
+        email_raw = st.text_input("Email")
         password = st.text_input("Password", type="password")
 
         if st.button("Login"):
+            email = clean_email(email_raw)
+
             with engine.connect() as conn:
                 user = conn.execute(
-                    text("SELECT id, password FROM users WHERE email=:e"),
+                    text("SELECT id, password FROM users WHERE lower(email)=:e"),
                     {"e": email}
                 ).fetchone()
 
@@ -157,53 +186,79 @@ if not st.session_state.user_id:
                 st.session_state.email = email
                 st.session_state.score = 0
                 st.session_state.start_time = time.time()
+                st.session_state.submitted = False
                 st.experimental_rerun()
             else:
-                st.error("Invalid credentials")
+                st.error("Invalid email or password")
+
         st.markdown('</div>', unsafe_allow_html=True)
 
-    with tab2:
+    # ---------------- REGISTER ----------------
+    with tab_register:
         st.markdown('<div class="accountooze-card">', unsafe_allow_html=True)
-        new_email = st.text_input("Email", key="r1")
-        new_password = st.text_input("Password", type="password", key="r2")
+
+        reg_email_raw = st.text_input("Email", key="reg_email")
+        reg_password = st.text_input("Password", type="password", key="reg_pwd")
 
         if st.button("Create Account"):
-            try:
+            email = clean_email(reg_email_raw)
+
+            if not email or not reg_password:
+                st.error("Email and password are required")
+            else:
                 with engine.begin() as conn:
-                    conn.execute(
-                        text("INSERT INTO users (email, password) VALUES (:e, :p)"),
-                        {"e": new_email, "p": hash_password(new_password)}
-                    )
-                st.success("Account created. Login now.")
-            except:
-                st.error("Email already exists")
+                    existing = conn.execute(
+                        text("SELECT id FROM users WHERE lower(email)=:e"),
+                        {"e": email}
+                    ).fetchone()
+
+                    if existing:
+                        st.error("Account already exists. Please login.")
+                    else:
+                        conn.execute(
+                            text("""
+                                INSERT INTO users (email, password)
+                                VALUES (:e, :p)
+                            """),
+                            {
+                                "e": email,
+                                "p": hash_password(reg_password)
+                            }
+                        )
+                        st.success("Account created successfully. Please login.")
+                        st.stop()
+
         st.markdown('</div>', unsafe_allow_html=True)
 
-# -------------------------------------------------
+# =================================================
 # TEST
-# -------------------------------------------------
+# =================================================
 else:
     if not st.session_state.submitted:
+
+        # -------- MCQs --------
         st.markdown('<div class="accountooze-card">', unsafe_allow_html=True)
         st.subheader("🧠 MCQs")
 
-        for q, ans, opts in MCQS:
-            user_ans = st.radio(q, opts, key=q)
-            if user_ans == ans:
+        for q, correct, options in MCQS:
+            ans = st.radio(q, options, key=q)
+            if ans == correct:
                 st.session_state.score += 1
+
         st.markdown('</div>', unsafe_allow_html=True)
 
+        # -------- BANK TASK --------
         st.markdown('<div class="accountooze-card">', unsafe_allow_html=True)
         st.subheader("🏦 Bank Transaction Classification")
 
         for i, task in enumerate(BANK_TASKS):
             st.write(f"**Bank Description:** {task['description']}")
-            vendor = st.text_input("Vendor Name", key=f"v{i}")
-            gl = st.selectbox("GL Account", GL_OPTIONS, key=f"g{i}")
+            vendor_input = st.text_input("Vendor Name", key=f"vendor_{i}")
+            gl_input = st.selectbox("GL Account", GL_OPTIONS, key=f"gl_{i}")
 
-            if vendor.strip().lower() == task["vendor"].lower():
+            if vendor_input.strip().lower() == task["vendor"]:
                 st.session_state.score += 1
-            if gl == task["gl"]:
+            if gl_input == task["gl"]:
                 st.session_state.score += 2
 
         if st.button("Submit Test"):
@@ -213,18 +268,23 @@ else:
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # -------------------------------------------------
-    # RESULTS
-    # -------------------------------------------------
+    # =================================================
+    # RESULTS + LEADERBOARD
+    # =================================================
     else:
         time_taken = round(st.session_state.end_time - st.session_state.start_time, 2)
 
         with engine.begin() as conn:
             conn.execute(
-                text("INSERT INTO results (user_id, score, time_taken) VALUES (:u,:s,:t)"),
-                {"u": st.session_state.user_id,
-                 "s": st.session_state.score,
-                 "t": time_taken}
+                text("""
+                    INSERT INTO results (user_id, score, time_taken)
+                    VALUES (:u, :s, :t)
+                """),
+                {
+                    "u": st.session_state.user_id,
+                    "s": st.session_state.score,
+                    "t": time_taken
+                }
             )
 
             leaderboard = conn.execute(text("""
@@ -236,9 +296,9 @@ else:
             """)).fetchall()
 
         st.markdown('<div class="accountooze-card">', unsafe_allow_html=True)
-        st.success("Test Completed")
+        st.success("✅ Test Completed")
         st.write(f"Score: **{st.session_state.score}**")
-        st.write(f"Time Taken: **{time_taken} sec**")
+        st.write(f"Time Taken: **{time_taken} seconds**")
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown('<div class="accountooze-card">', unsafe_allow_html=True)
@@ -250,9 +310,9 @@ else:
             st.session_state.clear()
             st.experimental_rerun()
 
-# -------------------------------------------------
+# =================================================
 # FOOTER
-# -------------------------------------------------
+# =================================================
 st.markdown("""
 <div class="footer">
 © 2026 Accountooze Outstaffing · Accounting Training Platform
