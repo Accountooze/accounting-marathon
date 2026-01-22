@@ -1,7 +1,11 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import streamlit as st
 import time
 import os
 from sqlalchemy import create_engine, text
+
 
 # =================================================
 # PAGE CONFIG
@@ -153,7 +157,7 @@ if not st.session_state.started:
             st.session_state.started = True
             st.session_state.score = 0
             st.session_state.start_time = time.time()
-            st.experimental_rerun()
+            st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -190,7 +194,7 @@ elif not st.session_state.submitted:
     if st.button("Submit Test"):
         st.session_state.submitted = True
         st.session_state.end_time = time.time()
-        st.experimental_rerun()
+        st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -236,7 +240,7 @@ else:
 
     if st.button("Restart"):
         st.session_state.clear()
-        st.experimental_rerun()
+        st.rerun()
 
 # =================================================
 # FOOTER
@@ -246,3 +250,5 @@ st.markdown("""
 © 2026 Accountooze Outstaffing · Accounting Training Platform
 </div>
 """, unsafe_allow_html=True)
+ 
+ 
