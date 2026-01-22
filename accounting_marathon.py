@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 # =================================================
-# BRANDING
+# BRANDING (Accountooze)
 # =================================================
 st.markdown("""
 <style>
@@ -54,17 +54,24 @@ engine = create_engine(DATABASE_URL)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def hash_password(pwd: str) -> str:
-    return pwd_context.hash(pwd)
-
-def verify_password(pwd: str, hashed: str) -> bool:
-    return pwd_context.verify(pwd, hashed)
-
 def clean_email(email: str) -> str:
     return email.strip().lower()
 
+def validate_password(pwd: str):
+    if len(pwd) < 8:
+        return "Password must be at least 8 characters"
+    if len(pwd.encode("utf-8")) > 72:
+        return "Password too long (max 72 characters)"
+    return None
+
+def hash_password(pwd: str) -> str:
+    return pwd_context.hash(pwd.encode("utf-8"))
+
+def verify_password(pwd: str, hashed: str) -> bool:
+    return pwd_context.verify(pwd.encode("utf-8"), hashed)
+
 # =================================================
-# CREATE TABLES (SAFE)
+# CREATE TABLES
 # =================================================
 with engine.begin() as conn:
     conn.execute(text("""
@@ -141,10 +148,7 @@ GL_OPTIONS = [
 # =================================================
 # SESSION STATE INIT
 # =================================================
-for key in [
-    "user_id", "email", "score",
-    "start_time", "submitted"
-]:
+for key in ["user_id", "email", "score", "start_time", "submitted"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
@@ -159,7 +163,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =================================================
-# AUTH (LOGIN / REGISTER)
+# AUTHENTICATION
 # =================================================
 if not st.session_state.user_id:
 
@@ -202,9 +206,12 @@ if not st.session_state.user_id:
 
         if st.button("Create Account"):
             email = clean_email(reg_email_raw)
+            pwd_error = validate_password(reg_password)
 
             if not email or not reg_password:
                 st.error("Email and password are required")
+            elif pwd_error:
+                st.error(pwd_error)
             else:
                 with engine.begin() as conn:
                     existing = conn.execute(
