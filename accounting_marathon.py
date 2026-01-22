@@ -3,6 +3,8 @@ import time
 import os
 from sqlalchemy import create_engine, text
 from passlib.context import CryptContext
+import hashlib
+
 
 # =================================================
 # PAGE CONFIG
@@ -57,19 +59,22 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def clean_email(email: str) -> str:
     return email.strip().lower()
 
+def normalize_password(pwd: str) -> bytes:
+    """
+    Pre-hash password to fixed length so bcrypt never sees >72 bytes
+    """
+    return hashlib.sha256(pwd.encode("utf-8")).digest()
+
+def hash_password(pwd: str) -> str:
+    return pwd_context.hash(normalize_password(pwd))
+
+def verify_password(pwd: str, hashed: str) -> bool:
+    return pwd_context.verify(normalize_password(pwd), hashed)
+
 def validate_password(pwd: str):
     if len(pwd) < 8:
         return "Password must be at least 8 characters"
-    if len(pwd.encode("utf-8")) > 72:
-        return "Password too long (max 72 characters)"
     return None
-
-def hash_password(pwd: str) -> str:
-    return pwd_context.hash(pwd.encode("utf-8"))
-
-def verify_password(pwd: str, hashed: str) -> bool:
-    return pwd_context.verify(pwd.encode("utf-8"), hashed)
-
 # =================================================
 # CREATE TABLES
 # =================================================
